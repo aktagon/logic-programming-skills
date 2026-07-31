@@ -1,0 +1,6 @@
+{
+  "name": "logic-programming-skills",
+  "version": "0.1.0",
+  "description": "Agent skills for logic programming: SWI-Prolog, and s(CASP) goal-directed answer set programming with human-readable justifications. Executable code samples are run against a real swipl before release.",
+  "skills": "./skills/"
+}
