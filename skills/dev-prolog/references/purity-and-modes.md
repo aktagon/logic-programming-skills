@@ -16,6 +16,7 @@ A **mode** describes instantiation at call time, per argument:
 Document modes on every exported predicate:
 
 ```prolog
+% !load
 %!  ancestor(?Ancestor, ?Descendant) is nondet.
 %
 %   True when Ancestor precedes Descendant in the parent/2 relation.
@@ -87,20 +88,27 @@ the cut at all.
 `is/2` fixes the mode to `(-, +)`: the right side must be fully bound.
 
 ```prolog
+% !verify
 % Only works one way.
 celsius_f(C, F) :- F is C * 9 / 5 + 32.
-% ?- celsius_f(C, 212).   ERROR: Arguments are not sufficiently instantiated
+
+main :-
+    celsius_f(100, F), F =:= 212,                                  % (+,-) is fine
+    catch(celsius_f(_, 212), error(instantiation_error, _), true). % (-,+) throws
 ```
 
 CLP(FD) states the relation instead, so every mode works and the predicate can
 even enumerate:
 
 ```prolog
+% !verify
 :- use_module(library(clpfd)).
 
 celsius_f(C, F) :- F #= C * 9 // 5 + 32.
-% ?- celsius_f(100, F).   F = 212.
-% ?- celsius_f(C, 212).   C = 100.
+
+main :-
+    celsius_f(100, F), F == 212,       % forwards
+    celsius_f(C, 212), C == 100.       % backwards, with no labelling needed
 ```
 
 Rules of thumb:
@@ -146,6 +154,7 @@ bound after your check, you need `dif/2`.
 runs. Under the closed-world assumption it means "not provable", not "false":
 
 ```prolog
+% !load
 % ?- \+ parent(X, bob), X = tom.
 %    Wrong reading: "\+ parent(X,bob)" asks whether ANY X is a parent of bob.
 ```
@@ -163,6 +172,7 @@ Two questions, always:
    relation does not:
 
    ```prolog
+   % !load
    % Loops on the second clause before consuming input.
    ancestor(X, Y) :- ancestor(X, Z), parent(Z, Y).
    ```
@@ -170,6 +180,7 @@ Two questions, always:
    Put the base case and the consuming goal first:
 
    ```prolog
+   % !load
    ancestor(X, Y) :- parent(X, Y).
    ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).
    ```
@@ -179,6 +190,7 @@ Two questions, always:
    the loop:
 
    ```prolog
+   % !load
    :- table ancestor/2.
    ancestor(X, Y) :- parent(X, Y).
    ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).
@@ -186,7 +198,34 @@ Two questions, always:
 
    Tabling turns a class of non-terminating transitive-closure programs into
    terminating ones and is the right default for graph reachability over data you
-   do not control. It changes complexity, not semantics.
+   do not control.
+
+   It is not a transparent optimisation, and the difference is observable:
+
+```prolog
+% !verify
+p(a,b). p(b,c). p(a,c).
+
+anc(X, Y) :- p(X, Y).
+anc(X, Y) :- p(X, Z), anc(Z, Y).
+
+:- table tanc/2.
+tanc(X, Y) :- p(X, Y).
+tanc(X, Y) :- p(X, Z), tanc(Z, Y).
+
+main :-
+    % Same clauses, same facts, different answers. Tabling yields each solution
+    % once, in fixpoint order; the untabled version yields clause order with a
+    % duplicate. Anything consuming solutions positionally sees the difference.
+    findall(X-Y, anc(X, Y),  [a-b, b-c, a-c, a-c]),
+    findall(X-Y, tanc(X, Y), [a-b, a-c, b-c]).
+```
+
+   The semantics change too, not only the answer multiset. Under negation,
+   tabling evaluates to a fixpoint rather than by SLDNF: `q :- \+ w.` with
+   `w :- \+ q.` exhausts the stack untabled, and answers — `q` fails — when `q/0`
+   is tabled. Reach for it to make a program terminate, not to speed one up, and
+   re-check any negation in the tabled predicates.
 
 A useful discipline: for any recursive predicate, write down which argument
 strictly decreases on each call. If you cannot name one, either add an accumulator

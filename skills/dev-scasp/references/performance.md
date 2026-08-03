@@ -23,10 +23,41 @@ That last one is where the cost lives.
 A three-argument call with two anonymous variables inside a negated context:
 
 ```prolog
+% !verify
+:- use_module(library(scasp)).
+:- use_module(library(scasp/human)).
+:- style_check(-singleton).
+
+processing(acme, health, insurance_scoring).
+high_risk(insurance_scoring).
+claimed(consent).
+
 exception(consent) :-
     claimed(consent),
     processing(_, _, P),
     not high_risk(P).
+
+denied :- not exception(consent).
+
+#pred processing(C,D,P) :: 'the activity is @(C) processing @(D) data for @(P)'.
+#pred high_risk(P)      :: '@(P) is high risk'.
+#pred claimed(B)        :: 'the controller claims @(B) as a legal basis'.
+
+render(Goal, S) :-
+    findall(T, scasp(Goal, [tree(T)]), [Tree|_]),
+    with_output_to(string(S), human_justification_tree(Tree, [justify_nmr(false)])).
+
+occurrences(Needle, Haystack, N) :-
+    split_string(Haystack, "", "", [H]),
+    split_string(H, "\n", "", Lines),
+    include([L]>>sub_string(L, _,_,_, Needle), Lines, Hits),
+    length(Hits, N).
+
+main :-
+    % Reaching the rule through `not` builds the dual: one branch per argument
+    % position of the three-argument call, so three for processing/3.
+    render(denied, Free),
+    occurrences("there is no evidence that the activity is", Free, 3).
 ```
 
 produces a dual that branches once per argument position. You pay for it only
@@ -96,8 +127,28 @@ processing fact". With one fact asserted they coincide. With two they do not, an
 the guard `not high_risk(P)` can be satisfied by an entirely unrelated record:
 
 ```prolog
-processing(acme, health, insurance_scoring).   % the one being asked about
-processing(acme, health, medical_treatment).   % any second, benign activity
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+% One fact. The rule is "correct" against this fixture.
+one(acme, health, insurance_scoring).   % the one being asked about
+
+% The same fixture plus any second, benign activity.
+two(acme, health, insurance_scoring).
+two(acme, health, medical_treatment).
+
+high_risk(insurance_scoring).
+claimed(consent).
+
+exception_one :- claimed(consent), one(_, _, P), not high_risk(P).
+exception_two :- claimed(consent), two(_, _, P), not high_risk(P).
+
+holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
+
+main :-
+    \+ holds(exception_one),   % one fact: the guard holds
+    holds(exception_two).      % add a benign second fact: the guard is defeated
 ```
 
 `P` binds to `medical_treatment`, `not high_risk(medical_treatment)` succeeds, and
@@ -144,6 +195,17 @@ one does not imply the other is fine.
 Pass the value down as an argument instead of re-deriving it:
 
 ```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+processing(acme, health, insurance_scoring).
+processing(acme, health, medical_treatment).
+special(health).
+high_risk(insurance_scoring).
+claimed(consent).
+has_basis.
+
 exception(consent, P) :-
     claimed(consent),
     not high_risk(P).
@@ -154,11 +216,27 @@ authority(D, _P) :- not special(D).
 authority(D, P)  :- special(D), has_exception(P).
 
 decision(C, D, P) :- processing(C, D, P), has_basis, authority(D, P).
+
+holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
+
+main :-
+    % P arrives bound from the query, so the guard can only be satisfied by the
+    % activity actually under consideration — the two-fact fixture no longer
+    % defeats it.
+    \+ holds(decision(acme, health, insurance_scoring)),
+    holds(decision(acme, health, medical_treatment)).
 ```
 
 Now `P` arrives bound from the top-level query. The dual has nothing to
 universally quantify over, the three branches collapse to one, and the rule can
 only be satisfied by the activity actually under consideration.
+
+Notice what moved rather than disappeared. `exception/2` no longer mentions
+`processing/3`, so on its own it succeeds for any value at all — measured:
+`exception(consent, banana)` holds. Establishing that the activity exists is now
+the caller's obligation, and `decision/3` above discharges it by leading with
+`processing(C, D, P)`. Bind the variable *and* keep the guard. Dropping the
+re-derivation is only a fix if something upstream still checks membership.
 
 Remember to update the `#pred` annotations for the new arities — an annotation
 that no longer matches its predicate silently stops applying.
@@ -200,18 +278,23 @@ main :-
 ```
 
 The justification tells you which one you wrote. The unscoped version renders a
-single line —
+five-line tree whose operative line is:
 
 ```
 there is no evidence that basis holds for any number not [consent,contract]
 ```
 
-— which is the constraint store saying out loud that it satisfied the goal by
-choosing a value nobody asked about. The scoped version instead walks each clause
-of `basis/1` and refutes it, and is longer for that reason. **A shorter tree is
-not the better one here**; the short one is the wrong answer. Measured on a
-twelve-clause `basis/1`: unscoped 5 lines and 3 ms, scoped 30 lines and 6 ms —
-and the scoped one is the only one that is right.
+That is the constraint store saying out loud that it satisfied the goal by
+choosing a value nobody asked about. Read that phrasing as the diagnostic it is.
+
+The scoped version renders **no tree at all**, because `scoped(a)` correctly has
+no answer — the block above asserts exactly that with `\+ holds(scoped(a))`. So
+the comparison is not "5 lines against 30". It is "a confident five-line
+explanation of a wrong answer, against no answer". **The version with the
+justification is the broken one here.** Any heuristic that reads tree size as
+rule-set quality gets this backwards, which is why the heuristic in "Measuring"
+below is scoped to comparing one query against itself over time, not to comparing
+two different rules.
 
 Annotate the wrapper (`#pred has_basis :: 'a legal basis is established'`) and it
 also reads better in the justification than the raw existential would.
@@ -221,11 +304,12 @@ also reads better in the justification than the raw existential would.
 Input flags asserted only when true should still be declared:
 
 ```prolog
+% !load
 :- dynamic consent_withdrawn/0, legal_mandate/0.
 ```
 
-Without the declaration you get `Warning: scasp_predicate 'user:consent_withdrawn'/0
-does not exist`. That is a **warning, not an error** — the query still succeeds and
+Without the declaration you get ``Warning: scasp_predicate `'user:consent_withdrawn'/0'
+does not exist``. That is a **warning, not an error** — the query still succeeds and
 absence is still treated as falsity, so this is hygiene rather than correctness.
 The better argument for the declarations is that they document the rule file's
 input interface.
@@ -245,6 +329,21 @@ Where a program asks both "does this hold?" and "is this explicitly false?", run
 the positive query first:
 
 ```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+processing(acme, health, insurance_scoring).
+processing(acme, health, medical_treatment).
+special(health).
+has_exception(medical_treatment).
+
+may(C, D, P) :- processing(C, D, P), not special(D).
+may(C, D, P) :- processing(C, D, P), special(D), has_exception(P).
+
+denial(C, D, P, no_exception) :-
+    processing(C, D, P), special(D), not has_exception(P).
+
 % NOTE: never put `->` directly around scasp/2 — a cut scasp/2 poisons every
 % later query in the process. Collect with findall/3 and branch on the list.
 solutions(G, S) :- findall(G-T, scasp(G, [tree(T)]), S).
@@ -256,6 +355,14 @@ decide(C, D, P, Verdict) :-
     ;   solutions(denial(C, D, P, _), Deny),
         ( Deny = [denial(_,_,_,R)-_|_] -> Verdict = deny(R) ; Verdict = unknown )
     ).
+
+main :-
+    decide(acme, health, medical_treatment, allow),
+    decide(acme, health, insurance_scoring, deny(no_exception)),
+    decide(acme, health, staff_directory,   unknown),   % not a known activity
+    % The `->`s branch on ordinary lists, never on a solver goal, so nothing is
+    % cut inside s(CASP) and a fourth query still runs.
+    decide(acme, health, medical_treatment, allow).
 ```
 
 The positive query short-circuits on the first proof. The negated query is where

@@ -9,7 +9,7 @@
       "name": "dev-prolog",
       "source": "./",
       "description": "Use when writing, reviewing, refactoring, or designing Prolog code — including facts, rules, queries, recursion, lists, DCGs, constraint logic programming (CLP(FD)), tabling, modules, exceptions, and PlUnit testing in SWI-Prolog or GNU Prolog projects. Covers idiomatic clause design, unification, backtracking, steadfastness, mode and termination reasoning, the four-port debugger, and the purity discipline that keeps a predicate usable in every mode. Fires on Prolog topics even when the user does not say \"Prolog\" explicitly — e.g. `.pl` / `.pro` files, expert-system rules, \":- \" clause syntax, \"predicate\", \"unification\", \"backtracking\", \"logic programming\", \"definite clause grammar\", \"rule-based reasoning over a knowledge base\", or any task whose source of truth is a set of declarative Horn clauses.",
-      "version": "2.3.0",
+      "version": "2.4.0",
       "license": "MIT",
       "author": {
         "name": "Aktagon"
@@ -30,7 +30,7 @@
       "name": "dev-scasp",
       "source": "./",
       "description": "Use when writing, reviewing, or debugging s(CASP) programs — the goal-directed Answer Set Programming system running inside SWI-Prolog via `library(scasp)`. Covers default negation (`not`), classical negation (`-`), abducibles (`#abducible`), integrity constraints (`:- Body.`), even-loop choice construction, predicate annotations (`#pred ... :: '@(X)...'`), the dual program and how unbound variables make it explode, and human-readable justifications. Fires on s(CASP) topics even when the user does not say \"s(CASP)\" explicitly — e.g. \"default reasoning in Prolog\", \"abductive reasoning\", \"stable models with Prolog syntax\", \"integrity constraint over a knowledge base\", \"expert system with defeasible rules\", \"explainable rules engine\", or any task whose source of truth is a set of Horn-ish rules with default negation and goal-directed ASP semantics.",
-      "version": "2.3.0",
+      "version": "2.6.1",
       "license": "MIT",
       "author": {
         "name": "Aktagon"

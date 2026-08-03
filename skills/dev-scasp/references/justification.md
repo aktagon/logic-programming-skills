@@ -6,12 +6,27 @@ human and consumable by a program — two different jobs that must not be confus
 ## Rendering a tree
 
 ```prolog
+% !verify
 :- use_module(library(scasp)).
 :- use_module(library(scasp/human)).
+:- style_check(-singleton).
+
+bird(polly).
+bird(tweety).
+penguin(tweety).
+flies(X) :- bird(X), not ab(X).
+ab(X)    :- penguin(X).
+
+#pred flies(X) :: '@(X) can fly'.
 
 explain(Goal) :-
     scasp(Goal, [tree(T)]),
     human_justification_tree(T, []).
+
+main :-
+    % findall/3, never once/1 or `->`: a cut scasp/2 poisons the process.
+    with_output_to(string(S), findall(t, explain(flies(polly)), [_|_])),
+    sub_string(S, _, _, _, "polly can fly").
 ```
 
 `human_justification_tree/2` prints to `current_output`. The second argument is
@@ -21,15 +36,21 @@ application.
 ## Suppressing the global-constraint block
 
 When the program has live global constraints, the renderer appends the NMR
-(non-monotonic reasoning) check to every tree. Its phrasing actively misleads:
-inside a proof that a goal does **not** hold, it emits lines of the form
+(non-monotonic reasoning) check to every tree. Its phrasing actively misleads.
+Inside a proof that `may_borrow(alice, book1)` **does** hold, the NMR block emits
+lines about entirely different people and books:
 
 ```
-it may be the case that alice may borrow book1
+alice may borrow book1, because
+      there is no evidence that bob may borrow any number not [book1,book9], because
+      there is no evidence that bob may borrow book1, because
+      there is no evidence that alice may borrow any number not [book1,book9], because
 ```
 
-A reader who is not an ASP practitioner reads that as the opposite of the
-verdict. Turn it off with `justify_nmr(false)`.
+Every line after the first is the constraint check reporting, not the verdict. A
+reader who is not an ASP practitioner sees "there is no evidence that alice may
+borrow ..." three lines under a positive answer and reads it as a contradiction.
+Turn it off with `justify_nmr(false)`.
 
 The size is not marginal. Measured on the six-line proof below, the NMR block
 takes it to twenty-four:
@@ -75,9 +96,12 @@ main :-
 Do **not** read the presence of `The global constraints hold` as proof that your
 own integrity constraints compiled. The NMR check also carries the `p`/`-p`
 consistency constraints, so a plain-consult program with no `begin_scasp` at all
-renders the block as soon as it uses classical negation — measured at 13 lines
-against 4 with `justify_nmr(false)`. The block tells you the NMR check ran, not
-whose constraints are in it. Read its contents, or test the constraint directly.
+renders the block as soon as it uses classical negation — measured on the
+tweety/polly program at 13 lines against 4 with `justify_nmr(false)`, querying
+`-flies(tweety)`. Name the query whenever you record a count like that: the same
+program queried `flies(polly)` gives 16 against 6. The block tells you the NMR
+check ran, not whose constraints are in it. Read its contents, or test the
+constraint directly.
 
 Where there is genuinely no NMR content — a plain-consult program with no
 classical negation — `justify_nmr(false)` changes nothing, because there is
@@ -141,6 +165,7 @@ output, the underlying cause is usually the same free-variable problem.
 ## Annotating for a non-technical reader
 
 ```prolog
+% !load scasp
 #pred processing(C, D, P) ::
     'the activity is @(C) processing @(D) data for @(P)'.
 #pred -may_process(C, D, P) ::

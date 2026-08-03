@@ -10,14 +10,14 @@ metadata:
   packs:
   - logic-programming-skills
   role: engineer
-  version: "2.3.0"
+  version: "2.6.1"
   tags:
   - asp
   - explainability
   - logic-programming
   - prolog
   - scasp
-  triggers: scasp, s(casp), answer set programming, asp, default negation, classic negation, abducible, abduction, defeasible rules, stable model, integrity constraint, goal-directed asp, library(scasp), swi-prolog asp, justification, proof tree, explainable rules
+  triggers: scasp, s(casp), answer set programming, asp, default negation, classic negation, abducible, abduction, defeasible rules, stable model, integrity constraint, goal-directed asp, library(scasp), swi-prolog asp, justification, proof tree, explainable rules, aggregation in asp, sum over clauses, rules do not add up, negation over a list, host rules boundary, mutation testing rules
   scope: implementation
   output-format: code
   related-skills: dev-prolog, dev-tla-plus, ontologist
@@ -25,10 +25,11 @@ metadata:
   - '#pred directives make their head variables genuine singletons (the @(X) references live inside quoted atoms), so every rule file needs :- style_check(-singleton). to consult without warnings. The directive is file-scoped, not global: SWI restores style flags at the end of the file load, so a second file consulted afterwards still warns.'
   - 'A #pred written inside a begin_scasp/end_scasp block is silently ignored by human_justification_tree/2. The template compiles pr_pred_predicate/4 into the unit''s private module (_scasp_<Unit>), but the renderer resolves templates against the module the tree''s atoms strip to — the caller''s. Put #pred after :- end_scasp. Verified both ways on SWI-Prolog 9.2.9.'
   - 'Cutting a scasp/2 call (with ->, once/1, or any commit) poisons the process: every later scasp/2 raises determinism_error(scasp_solve:stack_parents/3,det,fail,property). scasp/2 stores its stack via backtrackable b_setval; a cut prevents the untrail, so the next query inherits a stale module-qualified stack. findall/3 around every call PREVENTS it but does not repair it — after a cut has happened, findall-wrapped calls error too. Repair with nb_delete(scasp_stack), nb_delete(scasp_model), nb_delete(scasp_tree).'
-  - 'Only the headless `:- Body.` integrity constraint is mode-dependent. In a plain file consulted with library(scasp) and queried via scasp/2, `:- Body.` is an ordinary Prolog directive that runs at load time and constrains nothing; it is compiled into an NMR check only inside :- begin_scasp(...) ... :- end_scasp. The p/-p consistency check runs in BOTH modes — verified: a plain-consult file with p(1) and -p(1) returns no answers for any query, including an unrelated p(2).'
+  - 'Only the headless `:- Body.` integrity constraint is mode-dependent. In a plain file consulted with library(scasp) and queried via scasp/2, `:- Body.` is an ordinary Prolog directive that runs at load time and constrains nothing; it is compiled into an NMR check only inside :- begin_scasp(...) ... :- end_scasp. The p/-p consistency check runs in BOTH modes, but it is scoped to the offending predicate, not to the program — verified on a plain-consult file holding p(1), p(2), -p(1) and q(7): both p(1) and p(2) return no answers, while q(7) and a rule calling it still answer normally.'
   - Pinned to the SWI-Prolog port of s(CASP) (library(scasp)), verified on SWI-Prolog 9.2.9. The Ciao original and the standalone distribution differ in option names and justification rendering; treat any Ciao-specific flag as unverified here.
+  - 'Reserved generated names, verified against pack source: `_false_0` for headless integrity-constraint rules (pr_rules.pl:478, nmr_check.pl:83-84); `o_nmr_check` for the negative-loop check (compile.pl:132,182); the `o_chk<N>` family for global constraints (common.pl:122-127). Note `o_` is used pervasively for generated names but is NOT in reserved_prefix/1, so user atoms starting `o_` are unguarded on input while the compiler emits names that could collide by exact match. Separately, innermost dual predicates are generated as `<Name>_vh<Arity>` (comp_duals.pl:161-164) — a SUFFIX, so no prefix check finds it.'
   - 'The pack''s documented quick-test entry point (swipl -g qtest_scasp, or the -q flag) is broken in the SWI port: quick_test_file/2 resolves scasp(test/programs/<name>) but the directory is test/all_programs/. Run the harness with an explicit directory argument instead: swipl test/test_scasp.pl test/small_programs.'
-  - 'The presence of a trailing ''The global constraints hold'' block does not indicate begin_scasp mode. The NMR check also carries the p/-p consistency constraints, so any plain-consult program using classical negation renders the block too (verified: 13 lines with it, 4 with justify_nmr(false), no begin_scasp anywhere).'
+  - 'The presence of a trailing ''The global constraints hold'' block does not indicate begin_scasp mode. The NMR check also carries the p/-p consistency constraints, so any plain-consult program using classical negation renders the block too (verified on the tweety/polly program with no begin_scasp anywhere: querying -flies(tweety) gives 13 lines with the block and 4 with justify_nmr(false)). The absolute numbers are per-query, not per-program — the same program queried flies(polly) gives 16 and 6.'
   - human_justification_tree/2 renders constrained variables as 'any number not [a,b,c]' even when the values are atoms rather than numbers. This is upstream wording that leaks the constraint store into user-facing text.
 ---
 
@@ -101,20 +102,55 @@ is unsound in plain Prolog too — no dual program is involved, because the faul
 unification happens on the **positive** proof path:
 
 ```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+processing(acme, health, insurance_scoring).   % the one under query
+processing(acme, health, medical_treatment).   % any second, benign activity
+high_risk(insurance_scoring).
+claimed(consent).
+
 % BAD: P is unbound, so it matches any processing/3 fact in the database,
 % not the one under query. A second, unrelated fact silently defeats the guard.
 exception(consent) :-
     claimed(consent),
     processing(_, _, P),
     not high_risk(P).
+
+holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
+
+main :-
+    % An exception is "established" although the only activity under discussion
+    % is high risk. Delete the second fact and this starts failing.
+    holds(exception(consent)).
 ```
 
 ```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+processing(acme, health, insurance_scoring).
+processing(acme, health, medical_treatment).
+high_risk(insurance_scoring).
+claimed(consent).
+
 % GOOD: the caller binds P. The dual collapses, and the guard cannot be
 % satisfied by some other activity's data.
 exception(consent, P) :-
     claimed(consent),
     not high_risk(P).
+
+holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
+
+main :-
+    \+ holds(exception(consent, insurance_scoring)),   % refuses the right one...
+    holds(exception(consent, medical_treatment)),      % ...and still permits the other
+    % But note what binding P did NOT buy: the rule no longer mentions
+    % processing/3 at all, so it succeeds for a purpose that is not in the fact
+    % base. Guarding the activity is now the CALLER's job.
+    holds(exception(consent, banana)).
 ```
 
 This is not hypothetical — it is the most common way a working rule set becomes
@@ -133,6 +169,7 @@ established, `not basis(_)` still succeeds. Move the existential into a positive
 predicate and the quantifier lands outside the `not`:
 
 ```prolog
+% !load scasp
 has_basis :- basis(_).                       % existential inside a POSITIVE goal
 decision(X) :- thing(X), not has_basis.      % now `not` negates "a basis exists"
 ```
@@ -141,19 +178,101 @@ This is a correctness fix, not a tuning one, and the failure is silent. Note the
 counter-intuitive consequence: the *wrong* version renders the shorter proof
 tree, so "the tree got smaller" is not evidence of an improvement here.
 
+**Never negate over an enumeration.** This is the previous two traps combined,
+and it is the one that survives review, because the rule *reads* correctly. Given
+a list of items supplied from outside, the tempting shape is a single goal that
+checks them all:
+
+```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+contrib(p, f1, 10).
+contrib(p, f2, 20).   % the SECOND item is the point
+valid(p, f1, 10).     % ...and f2's contribution is NOT valid
+
+% BAD: F and S are bound on the positive path and FREE in the dual, which is
+% the path `not unverified/1` enters. Over an open domain the dual always finds
+% some F,S it can refute, so the gate passes.
+unverified(P) :- contrib(P, F, S), not valid(P, F, S).
+verified(P)   :- not unverified(P).
+
+holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
+
+main :-
+    holds(unverified(p)),   % there IS an invalid item...
+    holds(verified(p)).     % ...and the gate passes anyway. Both hold.
+```
+
+`unverified(p)` and `verified(p)` are **both satisfiable**: the program grants on
+an item it simultaneously reports invalid. Note the shape — invisible with one
+item, present at two.
+
+The fix is not a better rule. It is to stop asking s(CASP) the question:
+
+> **Whoever holds the list does the loop.** The host iterates and issues one
+> **ground** query per item; the rules answer "is *this* item valid?" and never
+> "are all items valid?".
+
+```python
+for c in items:                                    # ground, one query each, no dual
+    if not scasp_holds(facts, f"valid({p}, {c.id}, {c.amount})"):
+        return refusal(c)
+```
+
+s(CASP) cannot aggregate over an unbounded set anyway, so the enumeration was
+always going to live outside. The mistake is letting the *check* stay behind when
+only the *arithmetic* leaves.
+
+**A benchmark cannot tell you a dual is wrong.** The design above was chosen over
+an alternative on a measurement — 188 justification lines against 990 — and the
+measurement was accurate. It asked *how expensive is this dual*, never *is this
+dual sound*. **An unsound dual is cheap precisely because it is not doing the
+work**, so a favourable number is weak evidence at best and misleading at worst.
+Establish soundness by execution on a two-instance fact base first; measure after.
+
 Full treatment, with the measurement and how to read a bloated proof tree as a
 diagnostic: `references/performance.md`.
+
+## Alternative clauses are disjunction, never summation
+
+Several clauses for one predicate offer several ways to derive it. They do not
+combine. That is obvious stated plainly and catches people constantly, because
+the natural-language rule being encoded often says "add":
+
+```prolog
+% !load scasp
+share(P, C, S) :- direct(P, C, S).                      % 8
+share(P, C, S) :- via(P, I), stake(I, C, S).            % 7
+```
+
+A person holding 8 directly and 7 through an intermediate gets **two answers, 8
+and 7 — never 15**. A downstream threshold then binds whichever single route it
+reaches first, so `share(P, C, S), S #>= 15` simply fails, silently.
+
+That is correct semantics for *"does some qualifying route exist?"* and wrong
+semantics for *"what is the total?"*. If the rule you are encoding sums over a
+set whose size is not known until the facts arrive, the sum belongs to the host
+under the boundary above: the rules validate each route one at a time, the host
+adds the validated ones and feeds the total back as an input.
+
+Mark such an input as host-computed in its `#pred` gloss. A justification ending
+in a bare total tells the reader a number and hides where it came from; naming
+the parts is what lets a human re-add it, which is the only check available.
 
 ## Quick Reference
 
 ### Loading and querying
 
 ```prolog
+% !load
 :- use_module(library(scasp)).
 :- use_module(library(scasp/human)).   % human-readable justifications
 ```
 
 ```prolog
+% !load scasp
 ?- scasp(flies(X), [tree(T)]).          % solve, capture the justification
 ?- ? flies(X).                          % REPL shorthand (also ??, ?--, ?+-, ?-+, ?++)
 ```
@@ -163,6 +282,7 @@ global — it is not `(Goal, Tree)`. It is for `begin_scasp` mode, where the goa
 is an ordinary call with nowhere to hang an options list:
 
 ```prolog
+% !load
 ?- may_borrow(alice, book1), scasp_justification(T, []).   % begin_scasp exports
 ```
 
@@ -242,6 +362,7 @@ Like `scasp_justification/2`, `scasp_model/1` is `(-Model)` reading a global, no
 ### Default vs classical negation
 
 ```prolog
+% !load scasp
 flies(X) :- bird(X), not ab(X).      % default: no reason to think X abnormal
 -flies(X) :- penguin(X).             % classical: we know X does not fly
 ab(X) :- penguin(X).
@@ -253,11 +374,13 @@ Facts asserted only when true should still be declared, so the loader does not
 warn about a predicate that legitimately has no clauses:
 
 ```prolog
+% !load
 :- dynamic consent_withdrawn/0, legal_mandate/0.
 ```
 
-Without the declaration you get `Warning: scasp_predicate 'user:consent_withdrawn'/0
-does not exist` — a warning, not an error. The query still succeeds and absence is
+Without the declaration you get ``Warning: scasp_predicate `'user:consent_withdrawn'/0'
+does not exist`` — note the backtick-quote form — a warning, not an error. The
+query still succeeds and absence is
 still treated as falsity, so this is hygiene rather than correctness. Declaring
 the flags also documents the rule file's input interface, which is the better
 argument for doing it.
@@ -276,10 +399,37 @@ a headless `:- Body.` clause is just a **Prolog directive** — it runs at load
 time and constrains nothing. Your own integrity constraints are absent.
 
 Be precise about what is *not* absent. `p`/`-p` consistency **is** enforced in
-plain consult, and it is enforced the same brutal way: a file holding both `p(1)`
-and `-p(1)` returns no answers for anything, `p(2)` included. There is an NMR
-check in this mode; it just contains only the consistency constraints the
-compiler derived, not the ones you wrote.
+plain consult. There is an NMR check in this mode; it just contains only the
+consistency constraints the compiler derived, not the ones you wrote.
+
+Be equally precise about its reach, because it is narrower than it first looks.
+The check is scoped to the predicate that is inconsistent, not to the program.
+Executed:
+
+```prolog
+% !verify
+:- use_module(library(scasp)).
+:- style_check(-singleton).
+
+p(1).
+p(2).
+-p(1).        % p/1 is now inconsistent
+q(7).
+r :- q(7).
+
+answers(G, N) :- findall(t, scasp(G, [tree(_)]), L), length(L, N).
+
+main :-
+    answers(p(1), 0),      % the inconsistent atom: no answer
+    answers(p(2), 0),      % ...and every other p/1 atom goes with it
+    answers(q(7), 1),      % an unrelated predicate still answers
+    answers(r,    1).      % ...as does a rule that calls one
+```
+
+So `-p(1)` costs you the whole of `p/1`, including the `p(2)` nobody disputed.
+It does not cost you the rest of the program. When a query "mysteriously fails
+for every input", check the predicate in the query for a `p`/`-p` overlap, and do
+not assume a single inconsistency anywhere has silenced everything.
 
 **A `begin_scasp` block.** Only here is `:- Body.` compiled as an integrity
 constraint. Note the second difference: exported predicates are then called as
@@ -314,9 +464,11 @@ You cannot tell the two modes apart from the trailing
 `The global constraints hold, because …` block. It reports whatever the NMR check
 holds, and in plain consult that already includes the `p`/`-p` consistency
 constraints — verified: a plain-consult program with `-flies(X) :- penguin(X).`
-and no `begin_scasp` anywhere renders the block, 13 lines against 4 with
-`justify_nmr(false)`. To confirm *your* constraint is live, read what the block
-contains, or test it directly the way the block above does.
+and no `begin_scasp` anywhere renders the block. Querying `-flies(tweety)` gives
+13 lines against 4 with `justify_nmr(false)`. Quote the query alongside any such
+count: the same program queried `flies(polly)` gives 16 against 6. To confirm
+*your* constraint is live, read what the block contains, or test it directly the
+way the block above does.
 
 Write anything that depends on your own denials or NMR checks inside
 `begin_scasp`/`end_scasp`.
@@ -336,6 +488,7 @@ error, no warning, just unannotated output. Moving the same directives after
 An **OLON** is a cycle through `not` of odd length. The minimal case:
 
 ```prolog
+% !load scasp
 p :- not p.
 ```
 
@@ -358,6 +511,7 @@ usual reason a rule set "has no models and I cannot see why".
 ### Choice via even loops
 
 ```prolog
+% !load scasp
 q(X, Y) :- not not_q(X, Y).
 not_q(X, Y) :- not q(X, Y).
 ```
@@ -371,6 +525,7 @@ this pattern, executed.
 ### Abducibles
 
 ```prolog
+% !load scasp
 #abducible player(Game, Player).
 #abducible throw(Player, Sign).
 ```
@@ -411,6 +566,7 @@ from the start.
 ### Predicate annotations
 
 ```prolog
+% !load scasp
 #pred bird(X)    :: '@(X) is a bird'.
 #pred flies(X)   :: '@(X) can fly'.
 #pred -flies(X)  :: '@(X) can not fly'.
@@ -442,6 +598,7 @@ That makes `->` and `once/1` around `scasp/2` unsafe, which rules out the most
 natural way to write a verdict. Exhaust the goal instead:
 
 ```prolog
+% !load
 % Prevention. Safe to call repeatedly, in any mix of success and failure.
 holds(Goal) :- findall(t, scasp(Goal, [tree(_)]), [_|_]).
 ```
@@ -463,19 +620,29 @@ holds(G) :- findall(t, scasp(G, [tree(_)]), [_|_]).
 scasp_reset :-
     forall(member(K, [scasp_stack, scasp_model, scasp_tree]), ignore(nb_delete(K))).
 
-poisoned(G) :- catch(holds(G), error(determinism_error(_,_,_,_), _), fail).
+% Three outcomes, told apart. `\+ poisoned(G)` would NOT do: it is true both
+% when the call raises and when it merely fails, so it cannot prove an error
+% happened.
+outcome(G, O) :-
+    catch(( holds(G) -> O = ok ; O = failed ),
+          error(determinism_error(_,_,_,_), _),
+          O = poisoned).
 
 main :-
     holds(flies(polly)), holds(flies(polly)),      % findall throughout: fine
+    outcome(flies(polly), ok),
     ( scasp(flies(polly), [tree(_)]) -> true ; true ),   % one cut call...
-    \+ poisoned(flies(polly)),                     % ...and findall now errors
+    outcome(flies(polly), poisoned),               % ...and findall now ERRORS,
+                                                   % which is not the same as failing
     scasp_reset,
-    holds(flies(polly)).                           % repaired
+    outcome(flies(polly), ok).                     % repaired
 ```
 
 This block is the claim, executed: repeated `findall` calls are fine, a single
-cut call breaks the next one even under `findall`, and clearing the globals
-restores it.
+cut call makes the next one raise `determinism_error` even under `findall`, and
+clearing the globals restores it. The three outcomes are distinguished on
+purpose. A test that only asserts "the next call did not succeed" passes whether
+the call errored or simply failed, and those are different bugs.
 
 One fresh process per query sidesteps all of this at the cost of interpreter
 startup, which is a legitimate architecture for a request-scoped service rather
@@ -574,6 +741,9 @@ Four rules that hold up:
 - **Assert the denial separately from the failure of the permission.** `\+ holds(may_process(…))` and `holds(-may_process(…))` are different claims: the first says "not proved", the second says "proved false". A rule set that returns neither is a gap, and only testing both distinguishes it.
 - **Every `scasp/2` goes through `findall/3`, tests included.** PlUnit's `[fail]` and `[throws(_)]` options wrap the goal, and a cut around `scasp/2` poisons every later query in the process — including the rest of the suite. See "Never cut a `scasp/2` call".
 - **Gate on justification size.** Add one test asserting the line count of a rendered canonical justification stays under a bound. It is crude, but it catches the free-variable regressions that no verdict-level test will, and unlike a timing assertion it is stable across machines. `references/performance.md` has the measurement.
+- **Keep a mutation battery, and assert *named* catchers rather than a count.** Break one goal, and record which fixtures go red. Two failure modes matter and only the second needs the names: `UNCAUGHT` (nothing reddened — the goal is untested) and `DRIFTED` (the catcher set changed — something was re-blessed into vacuity, or new coverage arrived). A battery asking only "did anything redden?" reports green while coverage silently drains from three fixtures to one.
+
+  The reason it drains is worth internalising: **a mutation is observable only when the goal it breaks is the sole reason the fixture's verdict holds.** Move a predicate out of the rules and every clause depending on it acquires a *second, independent* reason to fail — so every mutation sharing a clause with it goes quiet at once, while the suite stays green. Refactoring is exactly when a battery earns its cost, and exactly when a passing suite is least informative.
 
 Run the pack's own suite as a smoke test when you suspect the install rather than
 your rules. Pass a directory — the harness takes paths as arguments:
@@ -595,7 +765,23 @@ packaging bug, not a broken install.
 - **Don't put a cut (`!`) in an s(CASP) clause.** It breaks the declarative reading and the stable-model search.
 - **Don't leave variables unbound in a negated context.** See the dual-program section — it costs correctness, not just speed.
 - **Don't write `not p(_)`.** It means "some value fails `p`", which is true by default over an open domain. Wrap the existential in a 0-ary predicate and negate that.
-- **Don't define both `p` and `-p` casually.** Any argument deriving both makes the program inconsistent. Use `-p :- not p.` only when you genuinely intend an explicit closed-world assumption.
+- **Don't define both `p` and `-p` casually.** Any argument deriving both makes the program inconsistent. Use `-p :- not p.` only when you genuinely intend an explicit closed-world assumption. Note how far the blast radius reaches: deriving both signs for **one** individual takes the predicate's answers to zero for **every** individual, including ones the two clauses never mention. Measured — adding a second `-p/1` clause that overlapped `p/1` for one subject took an unrelated subject from 1 answer to 0. Prefer one clause with a completeness premise over a second route.
+- **Don't reach for `--no_nmr` to quieten a run.** It disables the check that surfaces exactly the `p`/`-p` inconsistency above, so the flag hides the failure mode that is hardest to find by reading. It is also load-bearing in the other direction: an integrity constraint outside a `begin_scasp` block is already inert, and `--no_nmr` removes the remaining signal.
+- **Don't start an atom `c_`, `d_` or `n_`.** s(CASP) reserves single-letter prefixes for its own compilation — `reserved_prefix/1`, `prolog/scasp/program.pl:147-149`: `c` classical negation, `n` dual rule, `d` dummy. Exactly three; every other letter and all 676 two-letter prefixes round-trip.
+
+  This is **not** a display artifact. Stripping runs at COMPILE time (`strip_prefixes/2`, `pr_rules.pl:170-196`) into the `pr_rule/3` facts `solve.pl` actually solves, so the fact is unreachable by the name you wrote:
+
+      thing(c_oy).
+      ?- thing(c_oy).      % NO answer
+      ?- thing('-oy').     % ANSWER  <- the stored form
+      ?- thing(not(oy)).   % ANSWER, for thing(n_oy)
+
+  `n_` is the dangerous one: it becomes a negated LITERAL, so it changes the logical reading, not the spelling. Undocumented — nothing in the pack README or upstream docs mentions it. Validate identifiers against `^[cdn]_` where they are minted, and **reject rather than rename**: a host that silently rewrites its inputs names entities that do not exist.
+
+  **Why an argument atom is hit at all.** Tagging is applied only to the head FUNCTOR (`handle_prefixes/2`, `input.pl:326-339`), but stripping recurses into EVERY argument (`format_predicate3/4`, `pr_rules.pl`). A bare atom carries no marker distinguishing a 0-ary predicate symbol from a data atom, so the compiler cannot tell them apart on the way out. The corruption therefore happens purely on the read-back side, to atoms that were never tagged.
+
+  **Reserved generated NAMES, which no prefix rule catches.** From source: `_false_0` (headless integrity-constraint rules), `o_nmr_check` (the negative-loop check), and the `o_chk<N>` family (global constraints). Innermost duals are generated as `<Name>_vh<Arity>` (`comp_duals.pl:161-164`) — a SUFFIX, so a predicate you name `check_vh2/2` can collide and no prefix guard will see it. Note `o_` is used pervasively for generated names yet is NOT in `reserved_prefix/1`, so user `o_` atoms are unguarded on input while the compiler emits names that could collide exactly.
+- **Don't expect `:- dynamic foo/1.` to silence "predicate does not exist" loader warnings.** Under the `scasp` CLI it is parsed as a predicate *reference*, so the original warning stays and `` `(dynamic)/1' does not exist `` is added on top. Verified 2026-08-02.
 - **Don't parse the rendered justification to drive control flow.** The English text is for humans and is coupled to both your `#pred` wording and the pack's phrasing. Emit a reason *term* instead — `references/justification.md`.
 - **Don't write top-level `?- Goal.` directives in a library file** you want other code to consult; the directive fires at load time.
 - **Don't skip `#pred` annotations.** Without them you have a slower clingo.
@@ -612,8 +798,22 @@ SWI-Prolog + `scasp` install:
 uv run scripts/verify_snippets.py
 ```
 
-Blocks without the marker are illustrative fragments. Add the marker to any
-example you expect to keep working.
+There are two tiers and five markers, and the tiers are reported as two numbers
+that are never added together:
+
+| Marker | Tier | Establishes |
+| --- | --- | --- |
+| `% !verify` | executed | the program runs and its assertions hold |
+| `% !verify-fails` | executed | the program does **not** succeed |
+| `% !load` | load-checked | it consults with no diagnostic on stderr |
+| `% !load-fails` | load-checked | it consults **with** the diagnostic named by a following `% !expect` line |
+| none | neither | listed in the run's output, so the residue stays visible |
+
+A load check proves the source parses. It proves nothing about whether the block
+is true — every one of the twelve errors two review rounds found was in a block
+that parses, and one was a malformed `#pred` that loads with no diagnostic at
+all. Reach for `% !verify` unless the block genuinely cannot run, and add a
+marker to any example you expect to keep working.
 
 ## Attribution
 

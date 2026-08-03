@@ -35,6 +35,7 @@ A predicate's _meaning_ is not in its name — it is in the discipline you keep 
 Document modes in a comment above every exported predicate:
 
 ```prolog
+% !load
 %! parent(?Parent, ?Child) is nondet.
 %  True when Parent is a parent of Child. Usable in any mode.
 parent(tom, bob).
@@ -56,10 +57,18 @@ Violating these makes your code surprising to other Prolog programmers — they 
 ### Direct recursion with a base case
 
 ```prolog
+% !verify
 % Named sum_/2, not sum_list/2: sum_list/2 is a library(lists) predicate, and
 % defining it here would silently shadow the library version.
 sum_([], 0).
 sum_([H|T], S) :- sum_(T, S1), S is S1 + H.
+
+main :-
+    sum_([1,2,3,4], 10),
+    sum_([], 0),
+    % `S is S1 + H` fixes the mode to (+,?): a hole anywhere in the list is an
+    % instantiation error, not a constraint to solve.
+    catch(sum_([1,_,3], _), error(instantiation_error, _), true).
 ```
 
 Simple and correct, but **not tail-recursive** — every recursive call leaves a pending `S is S1 + H` on the stack.
@@ -67,9 +76,17 @@ Simple and correct, but **not tail-recursive** — every recursive call leaves a
 ### Accumulator-passing (tail recursive)
 
 ```prolog
+% !verify
 sum_(L, S) :- sum_(L, 0, S).
 sum_([], Acc, Acc).
 sum_([H|T], Acc, S) :- Acc1 is Acc + H, sum_(T, Acc1, S).
+
+main :-
+    sum_([1,2,3,4], 10),
+    % A million elements, folded in constant local stack because the recursive
+    % call is the last goal in the clause.
+    numlist(1, 1000000, Big),
+    sum_(Big, Total), Total =:= 500000500000.
 ```
 
 In practice reach for `sum_list/2` or `foldl/4` — this is here to show the shape,
@@ -82,8 +99,18 @@ Two clauses, one private helper. The helper's accumulator argument carries the r
 Reach for `findall(Template, Goal, Bag)` before you write a `write`/`fail` loop that collects results into an assertz'd list. It is the idiomatic way to materialize all solutions.
 
 ```prolog
-?- findall(X, parent(tom, X), Children).
-Children = [bob, liz].
+% !verify
+parent(tom, bob).
+parent(tom, liz).
+
+main :-
+    findall(X, parent(tom, X), Children), Children == [bob, liz],
+    % setof/3 sorts and dedupes...
+    setof(X, parent(tom, X), [bob, liz]),
+    % ...and on no solutions findall/3 returns [] where the other two FAIL.
+    findall(X, parent(ann, X), []),
+    \+ bagof(X, parent(ann, X), _),
+    \+ setof(X, parent(ann, X), _).
 ```
 
 `bagof/3` and `setof/3` are richer variants — `setof` sorts and dedupes; both fail (rather than returning `[]`) when there are no solutions.
@@ -133,18 +160,29 @@ A _green cut_ prunes branches the engine would never have succeeded on anyway. I
 A _red cut_ changes the program's logical meaning — without the cut, you would get extra (wrong) answers on backtracking. Red cuts are the smell. Two common cases:
 
 ```prolog
+% !verify
 % Red cut, AND not steadfast. The third argument is unified in the head, so a
 % pre-bound output takes part in clause selection: max(3, 2, 2) skips this
 % clause, matches the second, and wrongly succeeds.
 max(X, Y, X) :- X >= Y, !.
 max(_, Y, Y).
+
+main :-
+    max(3, 2, M), M == 3,      % computed output: the right answer
+    max(3, 2, 2).              % pre-bound output: wrongly succeeds. The defect.
 ```
 
 Replace with explicit guards that make the cases mutually exclusive:
 
 ```prolog
+% !verify
 max(X, Y, X) :- X >= Y.
 max(X, Y, Y) :- X <  Y.
+
+main :-
+    max(3, 2, M), M == 3,
+    max(2, 3, N), N == 3,
+    \+ max(3, 2, 2).           % pre-bound output is now simply checked
 ```
 
 Now each clause is true in isolation, no cut is required, and `max(3, 2, 2)`
@@ -157,13 +195,25 @@ the defect; output unification *before* the commitment is.
 From the source: combine goals with `fail` to force backtracking through every solution while using I/O predicates for the side effect.
 
 ```prolog
+% !verify
+student(bob).
+student(liz).
+
 print_all_students :- student(X), write(X), nl, fail.
 print_all_students.   % second clause succeeds after backtracking exhausts the first.
+
+main :-
+    with_output_to(string(S), print_all_students),
+    S == "bob\nliz\n",
+    % Exactly one solution: clause 1 always fails, clause 2 succeeds once.
+    with_output_to(string(_), findall(t, print_all_students, Ts)),
+    Ts == [t].
 ```
 
 This is **not** a general control-flow technique. Use it only when you actually want output for every solution and do not need the results back in Prolog. For any in-language use, prefer `findall/3` or `forall/2`:
 
 ```prolog
+% !load
 ?- forall(student(X), (write(X), nl)).
 ```
 

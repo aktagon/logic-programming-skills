@@ -10,7 +10,7 @@ metadata:
   packs:
   - logic-programming-skills
   role: engineer
-  version: "2.3.0"
+  version: "2.4.0"
   tags:
   - constraints
   - logic-programming
@@ -49,7 +49,7 @@ its author happened to test.
 1. **Describe relations, not procedures.** If you are sequencing steps, you have written a procedural program in Prolog syntax.
 2. **Argument order is a contract.** Roughly half the meaning of a fact is convention. `parent(Parent, Child)` and `parent(Child, Parent)` are different predicates with the same name — decide, document, never mix.
 3. **Prefer pattern matching to conditionals.** Several clauses with distinct head patterns beat one clause with guards.
-4. **Prefer the pure builtin to a hand-rolled recursion.** `length/2`, `append/3`, `member/2`, `between/3`, `msort/2` are already steadfast and already terminate in modes your version probably will not.
+4. **Prefer the pure builtin to a hand-rolled recursion.** `length/2`, `append/3` and `member/2` are relations: steadfast, and terminating in modes your version probably will not. `between/3` and `msort/2` belong on the list for steadfastness only — both throw `instantiation_error` when their input arguments are unbound, so prefer them to a hand-rolled version without expecting a relation.
 5. **Cut (`!`) is a smell.** Use it for genuine determinism, never to paper over clause order or a missing case.
 6. **A predicate should read aloud.** `student(X) :- owns(X, B), book(B).` reads "X is a student if X owns something that is a book."
 
@@ -84,16 +84,26 @@ second line. That is the whole argument for CLP(FD) in one example.
 ### Facts, rules, queries
 
 ```prolog
+% !verify
 owns(bob, book1).
 book(book1).
 
 student(X) :- owns(X, B), book(B).     % ":-" reads "if"; variables are Uppercase
 
+parent(tom, bob).
+parent(bob, ann).
+
 ancestor(X, Y) :- parent(X, Y).        % multiple clauses = disjunction
 ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).
+
+main :-
+    student(bob),
+    \+ student(tom),                                  % tom owns nothing
+    findall(D, ancestor(tom, D), [bob, ann]).         % clause 1, then clause 2
 ```
 
 ```prolog
+% !load
 ?- student(bob).      % succeed / fail
 ?- student(X).        % enumerate; `;` for the next solution
 ?- owns(_, book1).    % existence check
@@ -415,16 +425,23 @@ bug. Import the helper — or the test proves nothing.
 ### Testing with PlUnit
 
 ```prolog
+% !verify
+:- use_module(library(plunit)).
+
 :- begin_tests(lists).
 
-test(append_backwards, [true(X == [a])]) :-
+% `nondet` because append/3 leaves a choicepoint here. Without it PlUnit reports
+% "Test succeeded with choicepoint" — a warning, not a failure, and easy to
+% normalise away. Declare the determinism you actually have.
+test(append_backwards, [true(X == [a]), nondet]) :-
     append(X, [b], [a,b]).
 
 test(no_member, [fail]) :-
     member(z, [a,b]).
 
 :- end_tests(lists).
-% ?- run_tests.
+
+main :- run_tests.
 ```
 
 ### Running SWI-Prolog
@@ -441,6 +458,10 @@ swipl -q -g main -t halt script.pl # run main/0 then exit — the scripting form
 ?- trace, Goal.             % four-port debugger
 ?- gtrace, Goal.            % graphical tracer
 ```
+
+This block is checked at neither tier: `[file]` names a file that does not exist,
+and `trace`/`gtrace` are interactive. Three other blocks in this skill are
+unchecked for their own reasons, each named in the skill's `README.md`.
 
 ## Don't
 
@@ -464,8 +485,21 @@ SWI-Prolog install:
 uv run scripts/verify_snippets.py
 ```
 
-Blocks without the marker are illustrative fragments. Add the marker to any
-example you expect to keep working.
+There are two tiers and five markers, and the tiers are reported as two numbers
+that are never added together:
+
+| Marker | Tier | Establishes |
+| --- | --- | --- |
+| `% !verify` | executed | the program runs and its assertions hold |
+| `% !verify-fails` | executed | the program does **not** succeed |
+| `% !load` | load-checked | it consults with no diagnostic on stderr |
+| `% !load-fails` | load-checked | it consults **with** the diagnostic named by a following `% !expect` line |
+| none | neither | listed in the run's output, so the residue stays visible |
+
+A load check proves the source parses. It proves nothing about whether the block
+is true — every one of the twelve errors two review rounds found was in a block
+that parses. Reach for `% !verify` unless the block genuinely cannot run, and add
+a marker to any example you expect to keep working.
 
 ## Attribution
 
