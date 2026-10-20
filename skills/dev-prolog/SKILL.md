@@ -8,7 +8,18 @@ metadata:
   domain: development
   subdomain: backend
   packs:
+  - developer-skills
   - logic-programming-skills
+  openai:
+    display_name: Prolog
+    short_description: Write, review and debug SWI-Prolog code
+    default_prompt: Use $SKILL to write this Prolog.
+    products:
+    - api
+    - atlas
+    - chatgpt
+    - codex
+    allow_implicit_invocation: true
   role: engineer
   version: "2.4.0"
   tags:

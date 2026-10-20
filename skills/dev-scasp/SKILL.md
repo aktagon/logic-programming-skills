@@ -8,9 +8,20 @@ metadata:
   domain: development
   subdomain: backend
   packs:
+  - developer-skills
   - logic-programming-skills
+  openai:
+    display_name: s(CASP)
+    short_description: Goal-directed ASP with readable justifications
+    default_prompt: Use $SKILL to write this s(CASP) program.
+    products:
+    - api
+    - atlas
+    - chatgpt
+    - codex
+    allow_implicit_invocation: true
   role: engineer
-  version: "2.6.1"
+  version: "2.7.0"
   tags:
   - asp
   - explainability
@@ -85,6 +96,146 @@ finite problem.
 5. **Even loops construct choice.** `p :- not q.` `q :- not p.` yields two stable models. This is how you say "pick one".
 6. **Annotate everything you will show a human.** Without `#pred`, justifications are unreadable internal goals — and the justification is the whole reason you are here.
 
+## Sorts — s(CASP) has no types, and a wrong-KIND term reaches a verdict cleanly
+
+The universe is untyped atoms. Nothing distinguishes a person from a company, a
+percentage from a share count, or a date from an id, so a term of the wrong
+*kind* unifies, proves, and renders a clean justification tree. This is not
+exotic: it is what happens the first time a caller passes an argument in the
+wrong position and no rule objects.
+
+**Declare a sort per argument position, and require it in the rules.**
+
+```prolog
+% !load scasp
+#pred person(X) :: '@(X) on luonnollinen henkilö'.
+
+person(X) :- person_fact(X).                 % a stated finding, never inferred
+
+works_in_leadership(P, C) :- person(P), company(C), ceo(P, C).
+```
+
+Four things this section exists to say, each of which cost something to learn.
+
+- **A two-facts-per-predicate fixture cannot help.** That discipline catches a
+  goal binding to the wrong *row*; a sort violation binds to another *kind*.
+  Different bug, different detector — a fixture with two companies and no person
+  is exactly as blind as a fixture with one.
+- **Infer nothing.** The tempting one-liner is "anything appearing as a
+  shareholder is an entity, anything with a family relation is a person", and it
+  certifies whatever the case file happens to contain. A sort is a *finding*
+  somebody made, so it comes in as a fact.
+- **A sort is a RESTRICTION, so its fixture must expect a REFUSAL.** Deleting a
+  sort goal makes strictly *more* provable, so every fixture expecting an answer
+  goes on answering and a deletion battery reports the goal untested. See the
+  mutation-battery rule below; this is the single most common way a sort ships
+  with a test that cannot fail.
+- **Place the sort goal BEHIND what binds its variable.** It is a one-argument
+  positive guard, which is exactly the shape the dual program multiplies.
+  Measured: `person(P)` written ahead of the goal binding `P` took a canonical
+  denial from 372 to **590** rendered lines and broke a size gate on two
+  fixtures; moved behind, **404** — the same as having no sort at all.
+
+## Irreflexivity — `rel(X, X)` satisfies an existential guard truthfully
+
+Any binary relation meaning "two distinct things" — spouse, parent, intermediate
+company, predecessor — needs to say so. Without it `rel(X, X)` is a perfectly
+good proof that supplies no relationship, and it defeats existential guards in
+particular:
+
+```prolog
+% !load scasp
+relative(pekka, pekka).                      % the whole defect, in one fact
+has_relative(P) :- relative(P, _).           % "does this person have any relative?"
+```
+
+One fact, `relative(pekka, pekka)`, makes that true for a person with no family.
+The guard is not weakened — it is *satisfied*, truthfully, by a self-relation.
+
+```prolog
+% !load scasp
+#pred distinct_persons(A, B) :: '@(A) ja @(B) ovat eri henkilöitä'.
+distinct_persons(A, B) :- A \= B.
+
+spouse(A, B) :- spouse_fact(A, B).
+spouse(A, B) :- spouse_fact(B, A).           % symmetric — see below
+family_member(W, S) :- spouse(W, S), distinct_persons(W, S).
+```
+
+**Wrap the disequality — do not write a bare `A \= B`.** Measured: a bare `\=`
+renders **nothing at all** in the justification tree. Not English, not a
+placeholder — the goal is simply absent, so a reader cannot tell the question was
+ever asked. If the reason you put the guard in the rules rather than in the
+calling code is *visibility* (it usually is), the naive spelling defeats the
+decision while appearing to implement it.
+
+**Guard symmetric relations at both ends.** `rel(A, B) :- rel_fact(B, A).` means
+a repeated name is not merely redundant; it is the shape that satisfies the
+guard through the mirror clause.
+
+**A reflexive instance does not do the same thing in every relation.** Most
+*create* a link, so the assertion is "no link is manufactured". One that appears
+under `not` — a separation, an exclusion, a revocation — *blocks* a link, so the
+assertion is the opposite: a self-instance must not destroy a genuine relation. A
+test generated over the relation names alone passes vacuously on that one however
+the rules behave.
+
+## Guard in the rules AND at the boundary — refuse, never drop or rewrite
+
+When a host program feeds facts to a rule set, a constraint has two possible
+homes and needs both.
+
+| where | what it buys | what it misses alone |
+| --- | --- | --- |
+| the rules | the question appears in the justification tree | the bad fact silently confers nothing — a value vanishes with no diagnostic |
+| the boundary | the caller gets an error instead of a wrong answer | the tree never shows the constraint was considered |
+
+Rules-only is the subtler failure. The goal fails, the route is discarded, the
+total comes out lower, and nothing anywhere says a stated fact was ignored.
+
+**Refuse. Do not drop, and above all do not rewrite.** Silently normalising a
+caller's fact into the "right" spelling decides the case on facts nobody stated.
+When two spellings mean different things, the refusal must *route*:
+
+> `direct_share(x_oy, x_oy, 9)` states that x_oy holds shares in itself; a
+> väliyhteisö is a different entity, so this route does not apply. Write
+> `treasury_share(x_oy, 9)` instead.
+
+That is "this fact has a home and this predicate is not it" — a weaker and more
+defensible act than "this fact is false", and it leaves the caller somewhere to
+go. A bare refusal with no destination sends them back to type the same thing.
+
+**Keep the two copies genuinely independent.** The whole argument for duplicating
+a constraint is that a guard checked only against a list written beside it can be
+wrong *in agreement with its own test*. If the boundary list and the test's list
+are the same object, the duplication buys nothing. Generate one from the
+declaration and hand-write the other, so they can disagree.
+
+## A stated fact overrides every clause of its predicate
+
+If a caller may state `p/2` directly, then **no guard anywhere in `p/2`'s clauses
+can reach that path**. This is obvious in retrospect and reliably missed, because
+the guard is right there in the source and looks like it applies.
+
+```prolog
+% !load scasp
+works_in_leadership(P, C) :- person(P), ceo(P, C).
+works_in(P, C) :- works_in_leadership(P, C).   % the gate lives in here
+```
+
+A fixture asserting `works_in(pekka, ex_oy).` bypasses `works_in_leadership/2`
+entirely, and with it every check that predicate performs.
+
+Two consequences worth carrying:
+
+- **A guard inside a predicate is only as reachable as the calls to it.** A
+  mutation that deletes the *call* bypasses the gate without touching the gate,
+  so the entry that covers the call is also the entry that covers the guard.
+- **Decide deliberately whether test fixtures may override a derived
+  predicate.** It is convenient and it removes the rules from the path being
+  tested. If they may, say where and why; a fixture that quietly states a derived
+  predicate is a test of nothing.
+
 ## The dual program — the thing that actually bites
 
 To prove `not p`, s(CASP) does not fail-and-return. It compiles a **dual program**
@@ -95,6 +246,22 @@ dominate practical work.
 position becomes its own "forall" branch in the dual — verified: a negated
 three-argument call with two anonymous variables renders as three branches, one
 per argument position.
+
+**Put a goal BEHIND what binds it, regardless of polarity.** The rule is usually
+stated for negated goals and that is too narrow — dual branching does not care
+which side of a `not` you are on, and the *positive* case is the more expensive
+one because nobody is watching for it. Both halves measured on the same rule set:
+
+| move | model count | rendered lines |
+| --- | --- | --- |
+| reorder a *negation* relative to its binding goal | unchanged (0 with the fact, 1 without, either way) | 171 → 179 |
+| a *positive* one-argument guard ahead of its binding goal | unchanged | 372 → **590** |
+| the same guard moved behind | unchanged | **404** |
+
+Note what does *not* move in any row: the verdict. This is a **size** discipline,
+not a soundness one, and saying otherwise points the next reader away from the
+fix — 590 down to 404 is the whole of it, and no test that reads answers can see
+it. Gate on justification size or you will not notice.
 
 There is a second, *separate* bug that tends to travel with it, and the two are
 easy to conflate. Re-deriving from the database a value the caller already knows
@@ -580,6 +747,36 @@ Place these **outside** any `begin_scasp`/`end_scasp` block. Inside one they
 compile into the unit's private module and the renderer never finds them —
 silently. See "Two loading modes" above and `references/justification.md`.
 
+**Wrap every built-in comparison and disequality in an annotated predicate.** A
+built-in carries no `#pred`, and what it does to the tree is worse than
+unreadable — it differs by operator and neither behaviour is one you want:
+
+| written | rendered |
+| --- | --- |
+| `S >= 15` | English inside your target language: `14 is less than 15`, with `&(nbsp)` entities |
+| `A \= B` | **nothing at all** — the goal is simply absent |
+
+The second is the dangerous one. A reader of the justification cannot tell the
+question was ever asked, so a guard you put in the rules *specifically* to make
+it visible reads exactly like a guard that is not there. Wrap them:
+
+```prolog
+#pred share_at_least(S, T)      :: '@(S) % on vähintään @(T) %'.
+#pred distinct_persons(A, B)    :: '@(A) ja @(B) ovat eri henkilöitä'.
+
+share_at_least(S, T)   :- S #>= T.
+distinct_persons(A, B) :- A \= B.
+```
+
+Use CLP(FD) `#>=` rather than `>=` inside the wrapper — `is/2` and the standard
+comparisons demand ground arguments and defeat goal-directed evaluation. See
+"Constraints, not `is/2`".
+
+Name the wrappers after the *kinds* they relate rather than sharing one
+`distinct/2`, when the kinds differ. Two predicates for people and legal persons
+say the two rules are about different things; one predicate used at both sites
+asserts they are the same, which is the confusion sorts exist to prevent.
+
 ### Never cut a `scasp/2` call
 
 **Cutting a `scasp/2` call poisons the process.** Every subsequent `scasp/2`
@@ -745,6 +942,16 @@ Four rules that hold up:
 
   The reason it drains is worth internalising: **a mutation is observable only when the goal it breaks is the sole reason the fixture's verdict holds.** Move a predicate out of the rules and every clause depending on it acquires a *second, independent* reason to fail — so every mutation sharing a clause with it goes quiet at once, while the suite stays green. Refactoring is exactly when a battery earns its cost, and exactly when a passing suite is least informative.
 
+- **A deleted RESTRICTION is invisible to a deletion battery unless a fixture expects a REFUSAL.** This is the rule that catches people, and it is structural rather than a matter of care. A battery mutates by deleting a goal; deleting a restriction — a sort, an irreflexivity guard, a threshold, a completeness premise — makes strictly *more* provable. So every fixture expecting an answer goes on answering, the battery reports the goal untested, and the natural response is to conclude the guard is dead code and delete it. The only fixture that can redden is one that expects **no answer**, and most suites have none.
+
+  Corollary, and it cuts the other way: **if the boundary refuses the fact base that would exercise a guard, that guard is permanently uncoverable by the battery.** There is no legal input that reaches it. Omit the entry with a note saying why, rather than adding one that will report `UNCAUGHT` forever — an entry that is uncatchable by construction teaches the reader to discount the word, and the whole value of the battery is that `UNCAUGHT` means "untested". Cover it with a test that reaches the rules directly, going around the boundary.
+
+- **Assert WHICH clause fired, not only that the goal holds.** When several clauses reach the same conclusion by different tests, a suite reading verdicts cannot see a case move between them — same answer, different reasoning, different premises for anyone to contest. Measured: lowering one clause's threshold so that a second clause also fires reclassified **nobody**, left every verdict unchanged, and moved seven model counts. The battery reported it as a model-count change; only a test asserting the satisfied clause's *premises* said which provision had decided the case.
+
+  Assert on the premises, never on a label. An `Item` argument threaded through the head is the rule author's claim about which clause is which, so asserting on it tests that the label matches itself. Read the premises out of the model instead and the semantics do the work.
+
+  And check that the battery actually *runs* that test. A battery that mutates the rules and then shells out to the solver never executes a host-language test suite, so the sharpest check you own can sit permanently out of reach of the mutations it was written for — measured, in exactly that configuration, for two days.
+
 Run the pack's own suite as a smoke test when you suspect the install rather than
 your rules. Pass a directory — the harness takes paths as arguments:
 
@@ -763,7 +970,7 @@ packaging bug, not a broken install.
 
 - **Don't conflate `not` with `\+`.** `\+` is SWI's procedural negation-as-failure; `not` under `library(scasp)` is default negation with stable semantics.
 - **Don't put a cut (`!`) in an s(CASP) clause.** It breaks the declarative reading and the stable-model search.
-- **Don't leave variables unbound in a negated context.** See the dual-program section — it costs correctness, not just speed.
+- **Don't leave a goal ahead of what binds it — in a negated context or a positive one.** See the dual-program section. It costs **size**, not correctness, and the qualifier "in a negated context" is too narrow: dual branching is polarity-independent. Measured both halves: reordering a *negation* gave identical model counts (0 with the fact, 1 without, either ordering) and 171 → 179 rendered lines, while a *positive* one-argument guard placed ahead of the goal binding its variable cost **372 → 590** lines and 404 when moved behind. The adjacent unsoundness is re-derivation, a separate bug on the positive path, and it is described where it belongs in the dual-program section.
 - **Don't write `not p(_)`.** It means "some value fails `p`", which is true by default over an open domain. Wrap the existential in a 0-ary predicate and negate that.
 - **Don't define both `p` and `-p` casually.** Any argument deriving both makes the program inconsistent. Use `-p :- not p.` only when you genuinely intend an explicit closed-world assumption. Note how far the blast radius reaches: deriving both signs for **one** individual takes the predicate's answers to zero for **every** individual, including ones the two clauses never mention. Measured — adding a second `-p/1` clause that overlapped `p/1` for one subject took an unrelated subject from 1 answer to 0. Prefer one clause with a completeness premise over a second route.
 - **Don't reach for `--no_nmr` to quieten a run.** It disables the check that surfaces exactly the `p`/`-p` inconsistency above, so the flag hides the failure mode that is hardest to find by reading. It is also load-bearing in the other direction: an integrity constraint outside a `begin_scasp` block is already inert, and `--no_nmr` removes the remaining signal.

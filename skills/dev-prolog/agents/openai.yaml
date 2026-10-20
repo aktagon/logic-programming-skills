@@ -1,0 +1,11 @@
+interface:
+  display_name: Prolog
+  short_description: Write, review and debug SWI-Prolog code
+  default_prompt: Use $dev-prolog to write this Prolog.
+policy:
+  products:
+  - api
+  - atlas
+  - chatgpt
+  - codex
+  allow_implicit_invocation: true

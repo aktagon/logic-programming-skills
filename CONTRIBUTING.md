@@ -1,63 +1,45 @@
 # Contributing
 
-Thanks for wanting to improve these skills. Read this first — the workflow is
-not the usual one, and a pull request against the wrong tree will be closed
-without being merged, which wastes your time.
+These skills are compiled output. Every file here is generated from a
+hand-edited source in a private repository. A pull request against this
+repository cannot be merged, because the next release overwrites it.
 
-## Everything published is build output
+Open an issue instead. Corrections are welcome and are applied at the source.
 
-The public repository contains compiled packages only. Each `skills/<name>/`
-directory is emitted by a compiler from a single markdown seed, and every
-generated file carries a DO-NOT-EDIT marker. A change committed to a published
-package is overwritten on the next publish, so a pull request against it cannot
-survive even if it is correct.
+## What makes a useful report
 
-The seeds, the ontology that validates them, and the emitters live in a private
-repository maintained by Aktagon.
-
-## What that means for you
-
-**Report the problem, and we will fix it in the seed.** Open an issue with:
-
-- The skill and the file — for example `dev-zig`, `references/build-system.md`.
-- What is wrong. A wrong API name, an example that does not compile, advice that
-  is stale for the pinned version, a broken cross-reference.
-- What it should say instead, if you know.
-- How you found out. For code, the compiler output is the strongest evidence
-  there is, and it is what gets a fix prioritised.
+- **The skill and the file**, for example `dev-scasp`, `references/examples.md`.
+- **What the skill said**, quoted.
+- **What actually happened**, with the program and the system's own output.
+- **Which version** of SWI-Prolog or s(CASP) you ran.
 
 That report is more useful than a patch, because a patch to a generated file
-still has to be rewritten into the seed by hand before it can ship.
+still has to be rewritten into the source by hand before it can ship.
 
-## Corrections to Zig code carry a high bar
+## Corrections to programs carry a high bar
 
-`dev-zig` claims that every Zig block in the package compiled under a real
-`zig 0.16.0` before shipping. If you are reporting a code defect, run the gate
-that makes that claim:
+A program that parses is not a program that is right. `dev-scasp` records that
+two review rounds found twelve errors and every one was in a block that loaded
+cleanly, including a malformed `#pred` that produced no diagnostic at all.
 
-```bash
-python3 skills/dev-zig/scripts/verify_snippets.py /path/to/zig \
-    skills/dev-zig/SKILL.md skills/dev-zig/references/*.md
-```
+So paste what the system printed, not a reading of the code. For s(CASP), the
+justification tree is the strongest evidence there is: it shows which rules
+fired and which defaults applied.
 
-Paste the failure. The skill's design record (`skills/dev-zig/DESIGN.md`,
-ZIG-002) explains why compiler output rather than review is the standard here:
-Zig 0.16 renamed enough of the standard library that plausible-looking code is
-routinely wrong, and only a compiler catches it.
+## Attribution
 
-Note that the skill is pinned to exactly one Zig version by design (ZIG-001).
-"This does not work on 0.17" is expected, not a defect — though it is a useful
-signal about when the skill needs re-pinning.
+`dev-scasp` adapts work from the SWI-Prolog port of s(CASP) by Jan Wielemaker
+and from the original s(CASP) by Joaquín Arias and the IMDEA / UTD team. Both
+upstream projects are Apache-2.0. The skill's own `SKILL.md` carries the credit
+under its Attribution heading.
+
+If you believe any part of this package reproduces upstream material beyond what
+the attribution covers, report it as an issue and it will be corrected at the
+source.
 
 ## Licensing
 
-Contributions to the MIT-licensed packages are accepted under the MIT License.
-Do not paste code from a source whose licence you have not checked; attribution
-obligations have to travel with derived material, which is what
-`skills/dev-zig/references/ATTRIBUTION.md` exists to honour.
-
-## Contact
-
-GitHub issues for anything about a skill. Security problems go through
-[SECURITY.md](SECURITY.md), not an issue. Commercial licensing and consulting:
-[aktagon.com](https://aktagon.com).
+Contributions are accepted under the MIT licence this repository ships. Do not
+paste code from a source whose licence you have not checked: attribution
+obligations travel with derived material, and Apache-2.0 material in particular
+cannot be relicensed.

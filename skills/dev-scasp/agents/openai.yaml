@@ -1,0 +1,11 @@
+interface:
+  display_name: s(CASP)
+  short_description: Goal-directed ASP with readable justifications
+  default_prompt: Use $dev-scasp to write this s(CASP) program.
+policy:
+  products:
+  - api
+  - atlas
+  - chatgpt
+  - codex
+  allow_implicit_invocation: true
