@@ -2,12 +2,16 @@
 
 Six worked examples from the [JanWielemaker/sCASP](https://github.com/JanWielemaker/sCASP) SWI-Prolog port, each chosen because it isolates one core construct. Read in order; each example assumes you have read the previous one.
 
+Four are reproduced here, under Apache-2.0 — see
+[ATTRIBUTION.md](ATTRIBUTION.md). Two are linked with a `curl` command instead,
+for the licence reason §4 gives.
+
 ## How this file is checked
 
-**These blocks are verbatim upstream transcriptions and are deliberately not
-rewritten.** Two of them do not load under SWI-Prolog, and that is the point:
-this file documents *why* they do not, so replacing them with `scasp/2`-driven
-equivalents would delete the specimen that proves the claim.
+**The reproduced blocks are verbatim upstream transcriptions and are
+deliberately not rewritten.** One of them does not load under SWI-Prolog, and
+that is the point: this file documents *why*, so replacing it with a
+`scasp/2`-driven equivalent would delete the specimen that proves the claim.
 
 They are therefore checked at the load tier rather than the executed one, in both
 directions:
@@ -15,9 +19,14 @@ directions:
 | Example | Directive | What is checked |
 | --- | --- | --- |
 | `rps.pl`, `birds.pl`, `classic_negation_incostistent.pl` | `% !load` | consults with no diagnostic |
-| `hamcycle.pl` | `% !load-fails` | its headless `:- Body.` constraints run as ordinary directives and fail — the trap in SKILL.md, live |
 | `queens.pl` | `% !load-fails` | SWI's reader rejects `_nqueens` as a functor |
-| `hamcycle_two.pl` | none | an abbreviation, not a program: its `reachable/chosen/other` clauses are elided as prose |
+| `hamcycle.pl`, `hamcycle_two.pl` | none | not reproduced here; §4 links them and gives a `curl` command |
+
+`hamcycle.pl` was the second `% !load-fails` specimen until 2026-10-21. It is now
+linked rather than printed, for the licence reason §4 gives, so `queens.pl` is the
+only live proof of that directive. The trap `hamcycle.pl` demonstrated is still
+described in §4 and in SKILL.md; it is no longer demonstrated by a block this
+repository ships.
 
 A load check proves a block parses and consults. It proves nothing about whether
 the walkthrough around it is *true* — for that, see the executed blocks in
@@ -116,54 +125,57 @@ Read the upstream comment carefully. `p(2)` here has no clause, so it would retu
 
 **Takeaway.** Classic negation `-p` is not "not p" — it is "p is explicitly false." If both `p(X)` and `-p(X)` are derivable for the same X, every atom of `p/1` is unanswerable, not just `p(X)`. This is one of the easiest s(CASP) mistakes to make and one of the hardest to debug; when a query "mysteriously fails for every input," check the queried predicate for an accidental `p(X)` / `-p(X)` overlap.
 
-## 4. `hamcycle.pl` — integrity constraints and choice
+## 4 and 5. `hamcycle.pl` and `hamcycle_two.pl` — linked, not reproduced
 
-```prolog
-% !load-fails scasp
-% !expect Goal (directive) failed
-vertex(0). vertex(1). vertex(2).
-edge(0, 1). edge(1, 2). edge(2, 0).
+**Fetch them, they are not printed here:**
 
-reachable(V) :- chosen(U, V), reachable(U).
-reachable(0) :- chosen(V, 0).
-
-% Every vertex must be reachable.
-:- vertex(U), not reachable(U).
-
-% Choose exactly one edge from each vertex.
-other(U, V) :-
-    vertex(U), vertex(V), vertex(W),
-    edge(U, W), V \= W, chosen(U, W).
-chosen(U, V) :-
-    edge(U, V), not other(U, V).
-
-% You cannot choose two edges to the same vertex
-:- chosen(U, W), chosen(V, W), U \= V.
-?- chosen(1,2).
+```bash
+S=https://raw.githubusercontent.com/JanWielemaker/sCASP/72028b02d57e51fe24c4be54234ab75767cd469f
+curl -O $S/examples/hamcycle.pl
+curl -O $S/examples/hamcycle_two.pl
+swipl -g 'use_module(library(scasp/main)), main(["hamcycle.pl"])' -t halt
 ```
 
-**What it teaches.** A Hamiltonian-cycle solver in 15 lines. Two patterns dominate:
+The URL pins commit `72028b0`. Do not swap it for a branch name: upstream's
+default branch is `swipl`, a `master` branch also exists, and the two carry
+different copies of `hamcycle.pl`. A branch link would drift away from what this
+page describes, which is the whole failure a pin prevents.
 
-1. **Choice via negation.** `chosen(U, V) :- edge(U, V), not other(U, V).` The `other/2` helper says "there is a different chosen edge from U." Combining them, `chosen` is true exactly when no _other_ edge is chosen from U — forcing exactly-one selection per vertex.
-2. **Integrity constraints as denials.** `:- vertex(U), not reachable(U).` reads as "_reject any model where_ some vertex is unreachable." `:- chosen(U,W), chosen(V,W), U \= V.` rejects models where two distinct vertices both point to W. Constraints eliminate models; they do not derive facts.
+**Why these two are linked while the other four are printed.** Both appear in
+upstream's `test/all_programs/sasp/` as well as its `examples/`, byte-identical
+in both places. That directory is named after
+[s(ASP)](https://sourceforge.net/projects/sasp-system/) by Kyle Marple, which
+SourceForge lists as **GPLv3**, while s(CASP) itself is Apache-2.0. Whether these
+files actually originate in the s(ASP) distribution is unverified — the evidence
+is a directory name and an identical copy, not a confirmed lineage. Rather than
+argue it, this page does not reproduce them. A link carries no licence
+obligation, so the question stops mattering.
 
-The combination — choice + constraints — is the standard ASP "generate and test" pattern, expressed in three short clauses.
+**What they teach.** A Hamiltonian-cycle solver in about fifteen lines. Two
+patterns carry it, and both are worth recognising in your own code.
 
-## 5. `hamcycle_two.pl` — the same template at scale
+1. **Choice via negation.** A clause of the form "chosen if the edge exists and
+   no *other* edge is chosen from this vertex", paired with a helper defining
+   *other* as "a different chosen edge from the same vertex". The two together
+   force exactly one selection per vertex, with no counting and no arithmetic.
+2. **Integrity constraints as denials.** A headless `:- Body.` clause reads as
+   *reject any model where Body holds* — one rejecting models that leave a vertex
+   unreachable, another rejecting models where two vertices point at the same
+   target. Constraints eliminate models; they never derive facts.
 
-```prolog
-vertex(0). vertex(1). vertex(2). vertex(3).
-edge(0, 1). edge(1, 2). edge(2, 3). edge(3, 0).
-edge(2, 0). edge(0, 3). edge(3, 1).
+Together that is the standard ASP generate-and-test shape, in three short
+clauses.
 
-% ... reachable/chosen/other clauses identical to hamcycle.pl ...
-:- chosen(U, W), chosen(V, W), U \= V.
-?- chosen(1,2).
-```
+**`hamcycle_two.pl` changes only the facts.** Same rules, a four-vertex graph
+with seven edges instead of a three-vertex one. That is the declarative payoff
+stated as plainly as it ever gets: when the rules are stable and the facts change
+often, this is the right tool. When the rules churn and the data is fixed, it is
+not. Use that as the test before reaching for s(CASP) on a new problem.
 
-**What it teaches.** _The rules do not change. Only the facts change._ This is the declarative payoff: a 4-vertex graph with 7 edges runs the same Hamiltonian-cycle solver as the 3-vertex graph in example 4, with no edits to the logic. Compare with the procedural equivalent (graph traversal in any imperative language) and the difference in code volume is dramatic.
-
-**Use this as a teaching contrast.** When evaluating "should we use Prolog/s(CASP) here?", look for problems where the _rules_ are stable and the _facts_ change frequently. That is the sweet spot.
+**The trap, which is why `hamcycle.pl` was marked `% !load-fails`.** Its headless
+`:- Body.` constraints run as ordinary directives under a plain `swipl` load and
+fail, rather than acting as constraints. SKILL.md covers that live. Load it
+through `library(scasp/main)` as above, not with a bare `swipl hamcycle.pl`.
 
 ## 6. `queens.pl` — even-loop choice and Prolog-style recursion
 
@@ -233,6 +245,6 @@ Querying `?- nqueens(4, Q).` produces both via backtracking, demonstrating that 
 | Explicit closed-world axiom     | birds            | `-p(X) :- not p(X).` makes CWA derivable, not just assumed.                   |
 | Integrity constraint `:- Body.` | hamcycle, queens | Eliminate stable models — "this combination is forbidden."                    |
 | Even-loop choice                | hamcycle, queens | `p :- not q.` `q :- not p.` constructs a choice point.                        |
-| Same rules + different facts    | hamcycle_two     | The declarative win: only data changes between problem instances.             |
+| Same rules + different facts    | hamcycle_two (linked) | The declarative win: only data changes between problem instances.        |
 | Mix with Prolog-style recursion | queens           | Use Prolog idioms (accumulators, arithmetic, list patterns) within s(CASP).   |
 | Top-level `?- Goal.` directive  | birds, queens    | Fires at file consult; convenient for examples, problematic for library code. |

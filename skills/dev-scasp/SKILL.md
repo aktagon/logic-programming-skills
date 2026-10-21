@@ -1030,7 +1030,13 @@ by Jan Wielemaker, which ports the original
 the IMDEA / UTD team. Theory: Arias, Carro, Salazar, Marple, Gupta, "Constraint
 Answer Set Programming without Grounding" (TPLP 2018).
 
-The dual-program guidance, the `justify_nmr(false)` option, and the reason-term
-pattern were derived from debugging a production GDPR rule set, not from the
-upstream documentation.
+The dual-program guidance and the reason-term pattern were derived from debugging
+a production GDPR rule set rather than from the upstream documentation. The
+`justify_nmr(false)` option was listed here as one of them until 2026-10-21 and
+is not: upstream documents it at `prolog/scasp/html.pl:59`. The measured line
+counts around it are still ours.
+
+What this skill reproduces from upstream, and under which licence, is in
+[references/ATTRIBUTION.md](references/ATTRIBUTION.md). Read it before changing
+an example.
 

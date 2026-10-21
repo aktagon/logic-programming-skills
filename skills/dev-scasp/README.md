@@ -36,18 +36,16 @@ every one of them a singleton. A misspelled variable name in a load-checked bloc
 is therefore not reported.
 
 A `% !load-fails` block asserts the reverse and names the diagnostic it expects.
-Two upstream examples in `references/examples.md` carry it. `hamcycle.pl` fails
-because its headless `:- Body.` constraints run as ordinary Prolog directives.
-`queens.pl` fails because s(CASP)'s reader sets `allow_variable_name_as_functor`
-and SWI's does not. Both files are reproduced verbatim. Rewriting them to load
-cleanly would delete the evidence for what `references/examples.md` says about
-them.
+One upstream example in `references/examples.md` carries it: `queens.pl` fails
+because s(CASP)'s reader sets `allow_variable_name_as_functor` and SWI's does
+not. It is reproduced verbatim, because rewriting it to load cleanly would delete
+the evidence for what `references/examples.md` says about it.
 
-One block carries no marker:
-
-| Block | Why |
-| --- | --- |
-| `references/examples.md`, `hamcycle_two.pl` | An abbreviation, not a program. Its `reachable`, `chosen`, and `other` clauses are elided as prose. |
+`hamcycle.pl` carried the same marker until 2026-10-21 and is now linked rather
+than reproduced, for the licence reason `references/examples.md` §4 gives. That
+cost this skill one of its two `% !load-fails` specimens, and the trade was
+deliberate: the trap is still described, and a licence question nobody could
+close is no longer shipped to make a point about a directive.
 
 Verified against SWI-Prolog 9.2.9 and the SWI port of the s(CASP) pack.
 
@@ -117,6 +115,12 @@ For ordinary Prolog, see `dev-prolog` in this repository.
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT for this skill's own content. See [LICENSE](LICENSE).
+
+**Except the upstream material.** Four example programs and four `#pred`
+annotations are reproduced from the Apache-2.0 s(CASP) project and stay under
+that licence, with its text shipped as `references/APACHE-2.0.txt`.
+[references/ATTRIBUTION.md](references/ATTRIBUTION.md) names exactly which, and
+what is not from upstream.
 
 [Aktagon](https://aktagon.com).
