@@ -30,7 +30,7 @@
       "name": "dev-scasp",
       "source": "./",
       "description": "Use when writing, reviewing, or debugging s(CASP) programs — the goal-directed Answer Set Programming system running inside SWI-Prolog via `library(scasp)`. Covers default negation (`not`), classical negation (`-`), abducibles (`#abducible`), integrity constraints (`:- Body.`), even-loop choice construction, predicate annotations (`#pred ... :: '@(X)...'`), the dual program and how unbound variables make it explode, and human-readable justifications. Fires on s(CASP) topics even when the user does not say \"s(CASP)\" explicitly — e.g. \"default reasoning in Prolog\", \"abductive reasoning\", \"stable models with Prolog syntax\", \"integrity constraint over a knowledge base\", \"expert system with defeasible rules\", \"explainable rules engine\", or any task whose source of truth is a set of Horn-ish rules with default negation and goal-directed ASP semantics.",
-      "version": "2.7.0",
+      "version": "2.8.0",
       "license": "MIT",
       "author": {
         "name": "Aktagon"

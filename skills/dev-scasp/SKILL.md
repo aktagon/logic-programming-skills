@@ -21,7 +21,7 @@ metadata:
     - codex
     allow_implicit_invocation: true
   role: engineer
-  version: "2.7.0"
+  version: "2.8.0"
   tags:
   - asp
   - explainability
