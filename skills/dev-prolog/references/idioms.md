@@ -190,9 +190,12 @@ correctly fails. See `purity-and-modes.md` for why the superficially similar
 `max(X, Y, Max) :- X >= Y, !, Max = X.` is in fact steadfast — a cut alone is not
 the defect; output unification *before* the commitment is.
 
-## Forced-output pattern
+## Failure-driven loop
 
-From the source: combine goals with `fail` to force backtracking through every solution while using I/O predicates for the side effect.
+Combine goals with `fail` to force backtracking through every solution, using an
+I/O predicate for the side effect. The SWI-Prolog manual calls this "the
+classical failure driven loop" under `forall/2` — read it with
+`?- help(forall/2).`
 
 ```prolog
 % !verify
@@ -208,6 +211,33 @@ main :-
     % Exactly one solution: clause 1 always fails, clause 2 succeeds once.
     with_output_to(string(_), findall(t, print_all_students, Ts)),
     Ts == [t].
+```
+
+### Prefer `forall/2`
+
+Learn the `fail` loop so you can read other people's code. Write your own with
+`forall/2`. The manual gives two reasons. It names which half generates and
+which half performs the side effect. More importantly, it **fails when the side
+effect fails**, while the `fail` loop succeeds either way.
+
+```prolog
+% !verify
+student(bob).
+student(liz).
+
+print_all_students :- forall(student(X), (write(X), nl)).
+
+% A side effect that can never succeed, written both ways.
+broken_loop :- student(_), fail, fail.
+broken_loop.
+
+main :-
+    with_output_to(string(S), print_all_students),
+    S == "bob\nliz\n",
+    % The fail loop reports success even though the side effect never ran.
+    broken_loop,
+    % forall/2 reports the failure.
+    \+ forall(student(_), fail).
 ```
 
 This is **not** a general control-flow technique. Use it only when you actually want output for every solution and do not need the results back in Prolog. For any in-language use, prefer `findall/3` or `forall/2`:

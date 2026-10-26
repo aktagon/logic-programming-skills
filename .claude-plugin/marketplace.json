@@ -9,7 +9,7 @@
       "name": "dev-prolog",
       "source": "./",
       "description": "Use when writing, reviewing, refactoring, or designing Prolog code — including facts, rules, queries, recursion, lists, DCGs, constraint logic programming (CLP(FD)), tabling, modules, exceptions, and PlUnit testing in SWI-Prolog or GNU Prolog projects. Covers idiomatic clause design, unification, backtracking, steadfastness, mode and termination reasoning, the four-port debugger, and the purity discipline that keeps a predicate usable in every mode. Fires on Prolog topics even when the user does not say \"Prolog\" explicitly — e.g. `.pl` / `.pro` files, expert-system rules, \":- \" clause syntax, \"predicate\", \"unification\", \"backtracking\", \"logic programming\", \"definite clause grammar\", \"rule-based reasoning over a knowledge base\", or any task whose source of truth is a set of declarative Horn clauses.",
-      "version": "2.4.0",
+      "version": "2.5.0",
       "license": "MIT",
       "author": {
         "name": "Aktagon"
