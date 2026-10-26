@@ -214,11 +214,18 @@ tanc(X, Y) :- p(X, Y).
 tanc(X, Y) :- p(X, Z), tanc(Z, Y).
 
 main :-
-    % Same clauses, same facts, different answers. Tabling yields each solution
-    % once, in fixpoint order; the untabled version yields clause order with a
-    % duplicate. Anything consuming solutions positionally sees the difference.
-    findall(X-Y, anc(X, Y),  [a-b, b-c, a-c, a-c]),
-    findall(X-Y, tanc(X, Y), [a-b, a-c, b-c]).
+    % Same clauses, same facts, different answers. The untabled version yields
+    % clause order with a duplicate, so that order is assertable.
+    findall(X-Y, anc(X, Y), A),
+    A == [a-b, b-c, a-c, a-c],
+    % Tabling yields each solution once. It does NOT promise an enumeration
+    % order, so assert the set and the count, never the sequence. This file
+    % asserted `[a-b, a-c, b-c]` until 2026-10-26, when swipl 10.0.2 returned
+    % `[a-c, a-b, b-c]` and broke it. Anything consuming a tabled predicate's
+    % solutions positionally is relying on an unspecified detail.
+    findall(X-Y, tanc(X, Y), T),
+    sort(T, [a-b, a-c, b-c]),
+    length(T, 3).
 ```
 
    The semantics change too, not only the answer multiset. Under negation,

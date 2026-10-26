@@ -21,7 +21,7 @@ metadata:
     - codex
     allow_implicit_invocation: true
   role: engineer
-  version: "2.5.0"
+  version: "2.5.1"
   tags:
   - constraints
   - logic-programming
