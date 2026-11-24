@@ -30,61 +30,52 @@ Skills under other licences live in their own repositories. A repository has one
 
 ## Install
 
-The package under `skills/<name>/` is the same directory for every agent. Only
-the root manifest differs.
+Pick one route per agent. The package under `skills/<name>/` is the same
+directory for every agent.
 
-### Claude Code
-
-As a plugin marketplace:
+### Claude Code, as a plugin
 
 ```
-/plugin marketplace add aktagon/logic-programming-skills
-/plugin install dev-prolog@logic-programming-skills
-/plugin install dev-scasp@logic-programming-skills
+/plugin install logic-programming-skills --marketplace aktagon/logic-programming-skills
 ```
 
-The marketplace manifest is `.claude-plugin/marketplace.json`.
+This installs every skill in the pack. To install one skill:
 
-### Codex
+```
+/plugin install dev-prolog --marketplace aktagon/logic-programming-skills
+/plugin install dev-scasp --marketplace aktagon/logic-programming-skills
+```
 
-Codex searches for skills in `$CWD/.agents/skills`, `$CWD/../.agents/skills`,
-`$REPO_ROOT/.agents/skills`, `$HOME/.agents/skills`, and `/etc/codex/skills`.
-Copy the skill into one of them:
+### Any agent, with the `skills` CLI
+
+[`skills`](https://github.com/vercel-labs/skills) is a third-party installer from
+Vercel Labs. It needs Node.js.
+
+```bash
+npx skills add aktagon/logic-programming-skills
+npx skills add aktagon/logic-programming-skills --skill <name>
+```
+
+The first command asks which skills and which agents to install. The second
+installs one skill. Installs go to the current project. Add `-g` to install for
+your user account. The CLI sends anonymous usage data. Set `DISABLE_TELEMETRY=1`
+to turn that off.
+
+### By hand
+
+Clone the repository and copy a skill directory into the folder your agent
+reads. Create that folder first if it does not exist.
 
 ```bash
 git clone https://github.com/aktagon/logic-programming-skills.git
-mkdir -p ~/.agents/skills
-cp -R logic-programming-skills/skills/dev-prolog ~/.agents/skills/dev-prolog
-cp -R logic-programming-skills/skills/dev-scasp  ~/.agents/skills/dev-scasp
+cp -R logic-programming-skills/skills/<name> ~/.claude/skills/<name>   # Claude Code
+cp -R logic-programming-skills/skills/<name> ~/.agents/skills/<name>   # Codex and Gemini CLI
 ```
-
-Use `.agents/skills/` inside a repository instead to scope the skills to one
-project. The plugin manifest is `.codex-plugin/plugin.json`; the Codex plugin
-channel is review-gated through <https://platform.openai.com/plugins>.
-
-### Gemini CLI
-
-Gemini resolves skills from `~/.gemini/skills/` and from its `~/.agents/skills/`
-alias, and from `.gemini/skills/` or `.agents/skills/` inside a workspace:
-
-```bash
-git clone https://github.com/aktagon/logic-programming-skills.git
-mkdir -p ~/.gemini/skills
-cp -R logic-programming-skills/skills/dev-prolog ~/.gemini/skills/dev-prolog
-cp -R logic-programming-skills/skills/dev-scasp  ~/.gemini/skills/dev-scasp
-```
-
-The extension manifest is `gemini-extension.json` at the repository root. To
-develop against a local clone, `gemini extensions link` registers the checkout in
-`~/.gemini/extensions`.
 
 ### Two copies of the same skill
 
-Each agent reads every one of its skill directories, and installing by two routes
-installs the skill twice. On Claude Code, adding the plugin while
-`~/.claude/skills/dev-prolog` already exists gives two copies of `dev-prolog`.
-The same applies to `~/.agents/skills/` on Codex and Gemini, which both read that
-path. Pick one route per agent, and delete the other copy before switching.
+Installing a skill by two routes installs it twice. Pick one route per agent,
+and delete the other copy before switching.
 
 ## Verification
 
