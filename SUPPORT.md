@@ -2,22 +2,7 @@
 
 ## Install
 
-As a plugin marketplace:
-
-```
-/plugin marketplace add aktagon/logic-programming-skills
-/plugin install dev-prolog@logic-programming-skills
-/plugin install dev-scasp@logic-programming-skills
-```
-
-Or copy a single skill directly:
-
-```
-git clone https://github.com/aktagon/logic-programming-skills.git
-cp -R logic-programming-skills/skills/dev-scasp ~/.claude/skills/dev-scasp
-```
-
-Both routes install the same files.
+The [README](README.md) has the install commands under "Install".
 
 ## Getting help
 

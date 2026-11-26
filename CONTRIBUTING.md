@@ -1,8 +1,8 @@
 # Contributing
 
-These skills are compiled output. Every file here is generated from a
-hand-edited source in a private repository. A pull request against this
-repository cannot be merged, because the next release overwrites it.
+Every file here is generated from a hand-edited source in a private repository.
+A pull request against this repository cannot be merged, because the next
+release overwrites it.
 
 Open an issue instead. Corrections are welcome and are applied at the source.
 
